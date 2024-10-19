@@ -218,15 +218,15 @@ class Post:
 
         .. versionadded:: 4.9"""
         media_types = {
-            1: "GraphImage",
-            2: "GraphVideo",
-            8: "GraphSidecar",
+            1: "XDTGraphImage",
+            2: "XDTGraphVideo",
+            8: "XDTGraphSidecar",
         }
         fake_node = {
             "shortcode": media["code"],
             "id": media["pk"],
             "__typename": media_types[media["media_type"]],
-            "is_video": media_types[media["media_type"]] == "GraphVideo",
+            "is_video": media_types[media["media_type"]] == "XDTGraphVideo",
             "date": media["taken_at"],
             "caption": media["caption"].get("text") if media.get("caption") is not None else None,
             "title": media.get("title"),
@@ -252,7 +252,7 @@ class Post:
     def _convert_iphone_carousel(iphone_node: Dict[str, Any], media_types: Dict[int, str]) -> Dict[str, Any]:
         fake_node = {
             "display_url": iphone_node["image_versions2"]["candidates"][0]["url"],
-            "is_video": media_types[iphone_node["media_type"]] == "GraphVideo",
+            "is_video": media_types[iphone_node["media_type"]] == "XDTGraphVideo",
         }
         if "video_versions" in iphone_node and iphone_node["video_versions"] is not None:
             fake_node["video_url"] = iphone_node["video_versions"][0]["url"]
@@ -274,7 +274,7 @@ class Post:
     @staticmethod
     def supported_graphql_types() -> List[str]:
         """The values of __typename fields that the :class:`Post` class can handle."""
-        return ["GraphImage", "GraphVideo", "GraphSidecar"]
+        return ["XDTGraphImage", "XDTGraphVideo", "XDTGraphSidecar"]
 
     def _asdict(self):
         node = self._node
@@ -323,7 +323,7 @@ class Post:
                 '2b0673e0dc4580674a88d426fe00ea90',
                 {'shortcode': self.shortcode}
             )
-            self._full_metadata_dict = pic_json['data']['shortcode_media']
+            self._full_metadata_dict = pic_json['data']['xdt_shortcode_media']
             if self._full_metadata_dict is None:
                 raise BadResponseException("Fetching Post metadata failed.")
             if self.shortcode != self._full_metadata_dict['shortcode']:
@@ -417,7 +417,7 @@ class Post:
     @property
     def url(self) -> str:
         """URL of the picture / video thumbnail of the post"""
-        if self.typename == "GraphImage" and self._context.iphone_support and self._context.is_logged_in:
+        if self.typename == "XDTGraphImage" and self._context.iphone_support and self._context.is_logged_in:
             try:
                 orig_url = self._iphone_struct['image_versions2']['candidates'][0]['url']
                 url = re.sub(r'([?&])se=\d+&?', r'\1', orig_url).rstrip('&')
@@ -438,7 +438,7 @@ class Post:
 
         .. versionadded:: 4.6
         """
-        if self.typename == 'GraphSidecar':
+        if self.typename == 'XDTGraphSidecar':
             edges = self._field('edge_sidecar_to_children', 'edges')
             return len(edges)
         return 1
@@ -455,7 +455,7 @@ class Post:
 
         .. versionadded:: 4.7
         """
-        if self.typename == 'GraphSidecar':
+        if self.typename == 'XDTGraphSidecar':
             edges = self._field('edge_sidecar_to_children', 'edges')
             return [edge['node']['is_video'] for edge in edges]
         return [self.is_video]
@@ -467,7 +467,7 @@ class Post:
         .. versionchanged:: 4.6
            Added parameters *start* and *end* to specify a slice of sidecar media.
         """
-        if self.typename == 'GraphSidecar':
+        if self.typename == 'XDTGraphSidecar':
             edges = self._field('edge_sidecar_to_children', 'edges')
             if end < 0:
                 end = len(edges)-1
@@ -626,7 +626,7 @@ class Post:
         try:
             return self._field('edge_media_to_parent_comment', 'count')
         except KeyError:
-            return self._field('edge_media_to_comment', 'count')
+            return self._field('edge_media_to_parent_comment', 'count')
 
     def _get_comments_via_iphone_endpoint(self) -> Iterable[PostComment]:
         """
@@ -734,7 +734,7 @@ class Post:
             # Avoid doing additional requests if there are no comments
             return []
 
-        comment_edges = self._field('edge_media_to_comment', 'edges')
+        comment_edges = self._field('edge_media_to_parent_comment', 'edges')
         answers_count = sum(edge['node'].get('edge_threaded_comments', {}).get('count', 0) for edge in comment_edges)
 
         if self.comments == len(comment_edges) + answers_count:
@@ -749,7 +749,7 @@ class Post:
         return NodeIterator(
             self._context,
             '97b41c52301f77ce508f55e66d17620e',
-            lambda d: d['data']['shortcode_media']['edge_media_to_parent_comment'],
+            lambda d: d['data']['xdt_shortcode_media']['edge_media_to_parent_comment'],
             _postcomment,
             {'shortcode': self.shortcode},
             'https://www.instagram.com/p/{0}/'.format(self.shortcode),
@@ -775,7 +775,7 @@ class Post:
         yield from NodeIterator(
             self._context,
             '1cb6ec562846122743b61e492c85999f',
-            lambda d: d['data']['shortcode_media']['edge_liked_by'],
+            lambda d: d['data']['xdt_shortcode_media']['edge_liked_by'],
             lambda n: Profile(self._context, n),
             {'shortcode': self.shortcode},
             'https://www.instagram.com/p/{0}/'.format(self.shortcode),
@@ -1389,7 +1389,7 @@ class StoryItem:
             '2b0673e0dc4580674a88d426fe00ea90',
             {'shortcode': Post.mediaid_to_shortcode(mediaid)}
         )
-        shortcode_media = pic_json['data']['shortcode_media']
+        shortcode_media = pic_json['data']['xdt_shortcode_media']
         if shortcode_media is None:
             raise BadResponseException("Fetching StoryItem metadata failed.")
         return cls(context, shortcode_media)
